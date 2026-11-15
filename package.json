@@ -1,0 +1,13 @@
+{
+  "name": "puresave-pro-media-downloader",
+  "version": "2.0.0",
+  "description": "全平台无损无水印保存站：支持 抖音 / 小红书 / X (Twitter) / Instagram / 得物 (Poizon) 视频、原图与 LIVE 实况图，内置公网 HTTPS 手机穿透",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "tunnel": "./bin/cloudflared tunnel --url http://localhost:3456 --logfile .tunnel_url.txt"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

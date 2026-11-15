@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="referrer" content="no-referrer" />
+  <title>PureSave · 抖音 / TikTok / 小红书 / X / Ins / 得物 无损无水印保存站</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="bg-glow bg-glow-1"></div>
+  <div class="bg-glow bg-glow-2"></div>
+  <div class="bg-glow bg-glow-3"></div>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <div class="brand-logo" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+        </div>
+        <div>
+          <span class="brand-title">PureSave <span class="pro-tag">PRO</span></span>
+          <span class="brand-tag">ALL-IN-ONE LOSSLESS SAVER</span>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <div class="platform-pills">
+          <span class="pill pill-douyin"><span class="dot"></span>抖音</span>
+          <span class="pill pill-tiktok"><span class="dot"></span>TikTok</span>
+          <span class="pill pill-xhs"><span class="dot"></span>小红书</span>
+          <span class="pill pill-x"><span class="dot"></span>X</span>
+          <span class="pill pill-ins"><span class="dot"></span>Ins</span>
+          <span class="pill pill-dewu"><span class="dot"></span>得物</span>
+        </div>
+
+        <button type="button" id="mobileAccessBtn" class="btn-mobile-access">
+          <span class="pulse-dot"></span>
+          <span>📱 手机公网访问</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container main-content">
+    <!-- Public URL Top Banner (auto-shown when public tunnel is active) -->
+    <div id="publicUrlBanner" class="public-url-banner hidden">
+      <div class="public-banner-left">
+        <span class="live-badge">🌐 公网已连通</span>
+        <span class="public-banner-label">手机 4G/5G/Wi-Fi 随时访问：</span>
+        <a id="bannerPublicLink" href="#" target="_blank" rel="noopener" class="public-url-link">正在获取公网地址...</a>
+      </div>
+      <div class="public-banner-actions">
+        <button type="button" id="copyPublicUrlBtn" class="btn-mini">复制公网链接</button>
+        <button type="button" id="showQrModalBtn" class="btn-mini btn-mini-accent">扫码在手机打开</button>
+      </div>
+    </div>
+
+    <!-- Hero & Input Section -->
+    <section class="hero-card">
+      <div class="hero-header">
+        <h1>全平台无损 · 无水印保存 <span class="gradient-text">视频 / 原图 / 实况</span></h1>
+        <p class="hero-subtitle">
+          支持 <strong>抖音、TikTok、小红书、X (Twitter)、Instagram、得物 (Poizon)</strong>。直接粘贴 App 分享口令或链接，自动过滤杂文，直取母带级无水印视频、未压缩原图与 <code>LIVE 实况动态照片</code>。
+        </p>
+      </div>
+
+      <form id="parseForm" class="search-box" autocomplete="off">
+        <div class="input-wrapper">
+          <span id="detectedBadge" class="detected-badge hidden">自动识别</span>
+          <textarea
+            id="urlInput"
+            rows="3"
+            placeholder="在此粘贴任意平台分享口令或链接：&#10;• 抖音 / TikTok / 小红书 / 得物 完整分享口令（自动提取网址）&#10;• X (https://x.com/.../status/...) 或 Instagram (https://www.instagram.com/p/...)"
+          ></textarea>
+          <div class="input-actions">
+            <button type="button" id="pasteBtn" class="btn-ghost" title="从剪贴板粘贴">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <span>粘贴口令</span>
+            </button>
+            <button type="button" id="clearBtn" class="btn-ghost hidden" title="清空输入">
+              清空
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" id="submitBtn" class="btn-primary">
+          <span class="btn-text">⚡ 立即无损去水印提取</span>
+          <span class="btn-spinner hidden"></span>
+        </button>
+      </form>
+
+      <div class="quick-tips">
+        <span class="tips-label">一键实测：</span>
+        <button type="button" id="demoDouyinBtn" class="tip-chip tip-clickable">
+          🔥 测抖音国内无水印
+        </button>
+        <button type="button" id="demoTiktokBtn" class="tip-chip tip-clickable">
+          🎵 测 TikTok 原画无水印
+        </button>
+        <button type="button" id="demoInsBtn" class="tip-chip tip-clickable">
+          📸 测 Ins 10图轮播提取
+        </button>
+        <button type="button" id="demoXBtn" class="tip-chip tip-clickable">
+          🐦 测 X (:orig 无损原图)
+        </button>
+        <button type="button" id="demoLiveBtn" class="tip-chip tip-clickable">
+          🍎 预览 LIVE 实况图交互
+        </button>
+        <span class="tip-chip">✨ 支持手机 Safari / Chrome 直接存入相册</span>
+      </div>
+
+      <!-- Status / Error Banner -->
+      <div id="errorBanner" class="error-banner hidden" role="alert">
+        <div class="error-icon">!</div>
+        <div id="errorText" class="error-text"></div>
+      </div>
+    </section>
+
+    <!-- Result Section -->
+    <section id="resultSection" class="result-section hidden">
+      <div class="result-card">
+        <!-- Author & Meta Header -->
+        <div class="result-meta-bar">
+          <div class="author-info">
+            <img id="authorAvatar" class="author-avatar" src="" alt="avatar" />
+            <div>
+              <div class="author-name-row">
+                <span id="authorName" class="author-name"></span>
+                <span id="authorHandle" class="author-handle"></span>
+                <span id="platformBadge" class="platform-badge"></span>
+              </div>
+              <p id="mediaTitle" class="media-title"></p>
+            </div>
+          </div>
+
+          <div class="result-global-actions">
+            <button type="button" id="batchDownloadBtn" class="btn-secondary hidden">
+              📦 一键保存全部 (<span id="batchCount">0</span>)
+            </button>
+            <button type="button" id="musicDownloadBtn" class="btn-secondary hidden">
+              🎵 保存原声 BGM (.mp3)
+            </button>
+            <button type="button" id="coverDownloadBtn" class="btn-secondary hidden">
+              🖼️ 保存高清封面
+            </button>
+          </div>
+        </div>
+
+        <!-- Media Items Container -->
+        <div id="mediaGrid" class="media-grid"></div>
+      </div>
+    </section>
+
+    <!-- 6 Platforms Support Grid -->
+    <section class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon douyin-accent">抖</div>
+        <h3>抖音 &amp; TikTok</h3>
+        <p>自动剥离 <code>playwm</code> 水印层，支持抖音与国际版 TikTok（<code>tiktok.com</code> / <code>vt.tiktok.com</code>）1080P 母带原画视频、Photo Mode 图集与 <strong>LIVE 实况图</strong>。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon xhs-accent">薯</div>
+        <h3>小红书 (RED)</h3>
+        <p>提取 <code>originVideoKey</code> 母带级无水印视频流、<code>ci.xiaohongshu</code> 未压缩 PNG 原图及 <strong>小红书原生实况动态图</strong>。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon ins-accent">Ins</div>
+        <h3>Instagram</h3>
+        <p>支持单帖、10+ 多图混合轮播 (Carousel) 与 Reels 短视频，直取 <code>scontent</code> 原始未裁剪高分大图与原画 MP4。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon x-accent">𝕏</div>
+        <h3>X (Twitter)</h3>
+        <p>遍历推文全部 MP4 码率变体并锁定最高比特率原画流，图片自动开启 <code>name=orig</code> 4K 原图直存模式。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon dewu-accent">得</div>
+        <h3>得物 (Poizon)</h3>
+        <p>支持得物社区穿搭种草动态与商品详情页，自动剥离 OSS 缩略与水印参数，提取原画视频、无损大图与实况素材。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon proxy-accent">📱</div>
+        <h3>公网穿透 &amp; 手机直存</h3>
+        <p>内置 HTTPS 公网隧道与防盗链流式代理，手机在外网 4G/5G 也可随时打开，支持一键触发 iOS / Android 相册保存。</p>
+      </div>
+    </section>
+
+    <!-- Local History Section -->
+    <section id="historySection" class="history-section hidden">
+      <div class="section-header">
+        <h2>最近提取记录 <span class="sub-count" id="historyCount"></span></h2>
+        <button type="button" id="clearHistoryBtn" class="btn-link">清空记录</button>
+      </div>
+      <div id="historyList" class="history-list"></div>
+    </section>
+  </main>
+
+  <!-- Mobile Public Access Modal -->
+  <div id="mobileModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>📱 手机公网 &amp; 局域网访问</h3>
+        <button type="button" id="closeModalBtn" class="btn-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">
+          已为你开启 Cloudflare HTTPS 公网加密穿透隧道。无论你的手机连的是 <strong>5G/4G 移动网络</strong> 还是 <strong>Wi-Fi</strong>，直接扫码或打开下方链接即可使用：
+        </p>
+
+        <div class="qr-box">
+          <img id="qrCodeImg" alt="手机扫码打开" src="" />
+          <span class="qr-caption">用手机相机 / 微信 / 浏览器扫码直达</span>
+        </div>
+
+        <div class="url-group">
+          <label>🌐 公网 HTTPS 地址（全球任意网络可访问）：</label>
+          <div class="url-copy-row">
+            <input type="text" id="modalPublicUrl" readonly value="正在获取..." />
+            <button type="button" id="modalCopyPublicBtn" class="btn-copy-url">复制</button>
+          </div>
+        </div>
+
+        <div class="url-group">
+          <label>📶 同一 Wi-Fi 局域网超高速地址：</label>
+          <div class="url-copy-row">
+            <input type="text" id="modalLanUrl" readonly value="正在获取..." />
+            <button type="button" id="modalCopyLanBtn" class="btn-copy-url">复制</button>
+          </div>
+        </div>
+
+        <div class="mobile-save-tip">
+          <strong>💡 手机保存实况图与视频小贴士：</strong>
+          <ul>
+            <li>在手机浏览器打开后，可点击底部的「添加到主屏幕」，像原生 App 一样随时使用。</li>
+            <li>针对<strong>实况图 (Live Photo)</strong>：我们同时提供「无损静态原图」与「实况动态视频 (.mp4)」两个文件，手机点击「📲 存入手机相册」即可直接呼出系统分享菜单保存。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>PureSave PRO 全平台无损媒体提取站 · 支持抖音 / TikTok / 小红书 / X / Instagram / 得物 · 仅供个人学习与素材备份使用</p>
+    </div>
+  </footer>
+
+  <script src="./app.js"></script>
+</body>
+</html>

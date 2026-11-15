@@ -50,14 +50,27 @@
 
   const HISTORY_KEY = 'puresave_history_v2';
   const DEFAULT_TUNNEL_API =
-    'https://wyoming-dominant-follow-acquired.trycloudflare.com';
+    'https://airlines-environments-environments-friends.trycloudflare.com';
   const isStaticPagesHost = /github\.io|pages\.dev|vercel\.app|netlify\.app/i.test(
     window.location.hostname
   );
-  let apiBase = isStaticPagesHost
-    ? localStorage.getItem('puresave_api_base') || DEFAULT_TUNNEL_API
-    : '';
+  let apiBase = isStaticPagesHost ? DEFAULT_TUNNEL_API : '';
   let serverStatus = { publicUrl: null, lanUrl: window.location.origin };
+
+  function getCandidateApiBases() {
+    if (!isStaticPagesHost) return [''];
+    const saved = localStorage.getItem('puresave_api_base');
+    return [
+      ...new Set(
+        [
+          'http://localhost:3456',
+          'http://127.0.0.1:3456',
+          DEFAULT_TUNNEL_API,
+          saved,
+        ].filter(Boolean)
+      ),
+    ];
+  }
 
   function buildProxyUrl(remoteUrl, filename, disposition = 'attachment') {
     if (!remoteUrl) return '';
@@ -332,7 +345,7 @@
 
   demoLiveBtn.addEventListener('click', () => {
     urlInput.value =
-      '豪车实况素材图分享 还在羡慕别人朋友圈精致又高级，... https://xhslink.cn/o/Ane1XnSdeIT 把口令拷走，打开【小红书】查看详情~';
+      '先来几个实况吧 https://xhslink.cn/o/5z9RHPxbH4g 这篇内容在【小红书】候着你~';
     updateInputBadge();
     parseForm.requestSubmit();
   });
@@ -845,20 +858,38 @@
       }
 
       if (!parsedData) {
-        try {
-          const res = await fetch(`${apiBase}/api/parse`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ input: raw }),
-          });
-          const json = await res.json();
-          if (!res.ok || !json.ok) {
-            throw new Error(json.error || '解析失败，请检查链接是否公开有效');
+        let lastBackendErr = null;
+        const candidates = getCandidateApiBases();
+        for (const base of candidates) {
+          try {
+            const res = await fetch(`${base}/api/parse`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ input: raw }),
+            });
+            const json = await res.json();
+            if (!res.ok || !json.ok) {
+              lastBackendErr = new Error(
+                json.error || '解析失败，请检查链接是否公开有效'
+              );
+              if (res.status === 422 || res.status === 400) {
+                break;
+              }
+              continue;
+            }
+            apiBase = base;
+            parsedData = json.data;
+            break;
+          } catch (err) {
+            lastBackendErr = err;
           }
-          parsedData = json.data;
-        } catch (backendErr) {
+        }
+        if (!parsedData) {
           parsedData = await parseClientSideFallback(raw).catch(() => {
-            throw backendErr;
+            throw (
+              lastBackendErr ||
+              new Error('解析失败，请检查链接是否公开有效')
+            );
           });
         }
       }
@@ -874,26 +905,37 @@
 
   // Public Tunnel & Mobile QR Code Modal Logic
   async function fetchServerStatus() {
-    try {
-      const res = await fetch(`${apiBase}/api/status`);
-      const data = await res.json();
-      if (data.ok) {
-        serverStatus = data;
-        const primaryUrl = data.publicUrl || data.lanUrl || window.location.origin;
+    const candidates = getCandidateApiBases();
+    for (const base of candidates) {
+      try {
+        const res = await fetch(`${base}/api/status`);
+        const data = await res.json();
+        if (data.ok) {
+          apiBase = base;
+          serverStatus = data;
+          if (data.publicUrl) {
+            try {
+              localStorage.setItem('puresave_api_base', data.publicUrl);
+            } catch (_) {}
+          }
+          const primaryUrl =
+            data.publicUrl || data.lanUrl || window.location.origin;
 
-        if (data.publicUrl) {
-          publicUrlBanner.classList.remove('hidden');
-          bannerPublicLink.href = data.publicUrl;
-          bannerPublicLink.textContent = data.publicUrl;
+          if (data.publicUrl) {
+            publicUrlBanner.classList.remove('hidden');
+            bannerPublicLink.href = data.publicUrl;
+            bannerPublicLink.textContent = data.publicUrl;
+          }
+
+          modalPublicUrl.value = data.publicUrl || '正在生成公网隧道...';
+          modalLanUrl.value = data.lanUrl || window.location.origin;
+          qrCodeImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(
+            primaryUrl
+          )}`;
+          break;
         }
-
-        modalPublicUrl.value = data.publicUrl || '正在生成公网隧道...';
-        modalLanUrl.value = data.lanUrl || window.location.origin;
-        qrCodeImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(
-          primaryUrl
-        )}`;
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
   }
 
   function openMobileModal() {

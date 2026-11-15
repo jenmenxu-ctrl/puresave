@@ -2685,15 +2685,18 @@ const MIME_TYPES = {
   '.ico': 'image/x-icon',
 };
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Range',
+  'Access-Control-Allow-Private-Network': 'true',
+};
+
 const server = http.createServer(async (req, res) => {
   const reqUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 
   if (req.method === 'OPTIONS') {
-    res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    });
+    res.writeHead(204, CORS_HEADERS);
     res.end();
     return;
   }
@@ -2701,7 +2704,10 @@ const server = http.createServer(async (req, res) => {
   if (reqUrl.pathname === '/api/status' && req.method === 'GET') {
     const publicUrl = getPublicTunnelUrl();
     const lanIp = getLanIp();
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.writeHead(200, {
+      ...CORS_HEADERS,
+      'Content-Type': 'application/json; charset=utf-8',
+    });
     res.end(
       JSON.stringify({
         ok: true,
@@ -2728,6 +2734,7 @@ const server = http.createServer(async (req, res) => {
 
         if (!extractedUrl) {
           res.writeHead(400, {
+            ...CORS_HEADERS,
             'Content-Type': 'application/json; charset=utf-8',
           });
           res.end(
@@ -2768,11 +2775,13 @@ const server = http.createServer(async (req, res) => {
         }
 
         res.writeHead(200, {
+          ...CORS_HEADERS,
           'Content-Type': 'application/json; charset=utf-8',
         });
         res.end(JSON.stringify({ ok: true, data: result }));
       } catch (err) {
         res.writeHead(422, {
+          ...CORS_HEADERS,
           'Content-Type': 'application/json; charset=utf-8',
         });
         res.end(

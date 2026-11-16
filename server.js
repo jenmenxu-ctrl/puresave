@@ -63,7 +63,9 @@ function decodeHtmlEntities(str) {
 function extractUrlFromText(input) {
   if (!input || typeof input !== 'string') return null;
   const trimmed = input.trim();
-  const urlMatch = trimmed.match(/https?:\/\/[^\s"'<>，。！？；：）】\]）]+/i);
+  const urlMatch = trimmed.match(
+    /https?:\/\/[^\s"'<>，。！？；：）】\]）\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]+/i
+  );
   if (urlMatch) {
     return urlMatch[0].replace(/[.,!?;:)'"\]）】>]+$/, '');
   }
@@ -124,6 +126,13 @@ function detectPlatform(rawUrl) {
       host.includes('shizhuang-inc.com')
     ) {
       return 'dewu';
+    }
+    if (
+      host.includes('bilibili.com') ||
+      host.includes('b23.tv') ||
+      host.includes('bili2233.cn')
+    ) {
+      return 'bilibili';
     }
   } catch (_) {}
   return 'unknown';
@@ -342,7 +351,7 @@ async function parseDouyin(inputUrl) {
 const domesticDnsCache = new Map();
 
 function isDomesticChinaHost(hostname) {
-  return /(\.|^)(douyin|douyinvod|douyinpic|iesdouyin|byteimg|bytedance|snssdk|amemv|pstatp|ixigua|xiaohongshu|xhscdn|xhslink|rednote|dewu|poizon|duapp|shizhuang-inc|dw4)\./i.test(
+  return /(\.|^)(douyin|douyinvod|douyinpic|iesdouyin|byteimg|bytedance|snssdk|amemv|pstatp|ixigua|xiaohongshu|xhscdn|xhslink|rednote|dewu|poizon|duapp|shizhuang-inc|dw4|bilibili|b23|bili2233|bilivideo|hdslb|biliapi)\./i.test(
     hostname || ''
   );
 }
@@ -2312,7 +2321,13 @@ async function parseDewu(inputUrl) {
     });
   }
 
-  for (const vid of collected.videos) {
+  const cleanDewuVideos = collected.videos.filter(
+    (v) => !/\/algorithm\/wm\/|watermark_/i.test(v.url)
+  );
+  const videosToUse =
+    cleanDewuVideos.length > 0 ? cleanDewuVideos : collected.videos;
+
+  for (const vid of videosToUse) {
     if (seenUrls.has(vid.url)) continue;
     seenUrls.add(vid.url);
     mediaItems.push({
@@ -2332,9 +2347,15 @@ async function parseDewu(inputUrl) {
     });
   }
 
+  const seenImagePaths = new Set();
   for (const imgUrl of collected.images) {
-    if (seenUrls.has(imgUrl)) continue;
+    let imgPathKey = imgUrl;
+    try {
+      imgPathKey = new URL(imgUrl).pathname;
+    } catch (_) {}
+    if (seenUrls.has(imgUrl) || seenImagePaths.has(imgPathKey)) continue;
     seenUrls.add(imgUrl);
+    seenImagePaths.add(imgPathKey);
     const extMatch = imgUrl.match(/\.(png|jpg|jpeg|webp)$/i);
     const ext = extMatch
       ? extMatch[1].toLowerCase().replace('jpeg', 'jpg')
@@ -2389,6 +2410,141 @@ async function parseDewu(inputUrl) {
   };
 }
 
+/**
+ * Fetch JSON from domestic China API via en0 direct interface (bypasses TUN/VPN 412 blocks)
+ */
+async function fetchDomesticJson(url, headers = {}) {
+  const u = new URL(url);
+  const realIps = await resolveChinaDomesticIps(u.hostname);
+  const args = [
+    '-s',
+    '--max-time',
+    '10',
+    '-H',
+    `User-Agent: ${DESKTOP_UA}`,
+    '-H',
+    'Referer: https://www.bilibili.com/',
+  ];
+  if (realIps.length > 0) {
+    args.push('--interface', 'en0', '--resolve', `${u.hostname}:443:${realIps[0]}`);
+  }
+  for (const [k, v] of Object.entries(headers)) {
+    if (v) args.push('-H', `${k}: ${v}`);
+  }
+  args.push(url);
+  const raw = await runCurl(args);
+  return JSON.parse(raw);
+}
+
+/**
+ * Bilibili (哔哩哔哩) Parser — supports b23.tv short links, BV & av URLs, and multi-part ?p=N
+ */
+async function parseBilibili(targetUrl) {
+  let resolvedUrl = targetUrl;
+  if (/b23\.tv|bili2233\.cn/i.test(resolvedUrl) || !/(BV[a-zA-Z0-9]{10}|av\d+)/i.test(resolvedUrl)) {
+    resolvedUrl = await resolveRedirectUrl(resolvedUrl, { 'User-Agent': DESKTOP_UA });
+  }
+
+  const bvMatch = resolvedUrl.match(/(BV[a-zA-Z0-9]{10})/i);
+  const avMatch = resolvedUrl.match(/\/av(\d+)/i);
+  if (!bvMatch && !avMatch) {
+    throw new Error('未识别到有效的 B站 视频 BV/AV 号，请确认粘贴的是哔哩哔哩视频链接');
+  }
+
+  let pageNum = 1;
+  try {
+    const pParam = Number(new URL(resolvedUrl).searchParams.get('p') || '1');
+    if (Number.isFinite(pParam) && pParam >= 1) pageNum = Math.floor(pParam);
+  } catch (_) {}
+
+  let cookie = '';
+  try {
+    const spiRes = await fetchDomesticJson('https://api.bilibili.com/x/frontend/finger/spi');
+    if (spiRes?.data?.b_3) {
+      cookie = `buvid3=${spiRes.data.b_3}; buvid4=${spiRes.data.b_4 || ''}`;
+    }
+  } catch (_) {}
+
+  const viewQuery = bvMatch ? `bvid=${bvMatch[1]}` : `aid=${avMatch[1]}`;
+  const viewRes = await fetchDomesticJson(
+    `https://api.bilibili.com/x/web-interface/view?${viewQuery}`,
+    cookie ? { Cookie: cookie } : {}
+  );
+
+  if (viewRes?.code !== 0 || !viewRes?.data) {
+    throw new Error(`B站接口解析失败: ${viewRes?.message || '视频不存在或需要登录'}`);
+  }
+
+  const info = viewRes.data;
+  const pages = Array.isArray(info.pages) ? info.pages : [];
+  const targetPage = pages[pageNum - 1] || pages[0];
+  const cid = targetPage?.cid || info.cid;
+  const title =
+    pages.length > 1 && targetPage?.part
+      ? `${info.title} - P${pageNum} ${targetPage.part}`
+      : info.title || '哔哩哔哩无水印视频';
+  const cover = (info.pic || '').replace(/^http:\/\//i, 'https://');
+  const author = {
+    name: info.owner?.name || 'B站 UP主',
+    username: info.owner?.mid ? `UID: ${info.owner.mid}` : '哔哩哔哩',
+    avatar: (info.owner?.face || '').replace(/^http:\/\//i, 'https://'),
+  };
+
+  let playRes = await fetchDomesticJson(
+    `https://api.bilibili.com/x/player/playurl?bvid=${info.bvid}&cid=${cid}&qn=80&fnval=1&otype=json`,
+    cookie ? { Cookie: cookie } : {}
+  ).catch(() => null);
+
+  if (!playRes?.data?.durl?.length) {
+    playRes = await fetchDomesticJson(
+      `https://api.bilibili.com/x/player/playurl?bvid=${info.bvid}&cid=${cid}&qn=80&fnval=1&platform=html5&high_quality=1`,
+      cookie ? { Cookie: cookie } : {}
+    ).catch(() => null);
+  }
+
+  const durl = playRes?.data?.durl;
+  if (!Array.isArray(durl) || durl.length === 0 || !durl[0]?.url) {
+    throw new Error('未能获取到 B站 视频播放流地址，请稍后重试');
+  }
+
+  const allStreamCandidates = [
+    durl[0].url,
+    ...(Array.isArray(durl[0].backup_url) ? durl[0].backup_url : []),
+  ].filter(Boolean);
+  const videoUrl =
+    allStreamCandidates.find((u) => /bilivideo\.(com|cn)/i.test(u)) ||
+    allStreamCandidates[0];
+  const qualityNum = Number(playRes?.data?.quality || 64);
+  const qualityLabel = qualityNum >= 80 ? '1080P 高清 · MP4' : qualityNum >= 64 ? '720P 高清 · MP4' : 'MP4 原画视频';
+
+  return {
+    platform: 'bilibili',
+    platformName: '哔哩哔哩 (Bilibili)',
+    id: info.bvid || String(info.aid),
+    type: 'video',
+    title,
+    author,
+    cover,
+    mediaItems: [
+      {
+        index: 1,
+        type: 'video',
+        url: videoUrl,
+        thumbnail: cover,
+        variants: [
+          {
+            label: 'B站无水印原画视频 (MP4)',
+            quality: qualityLabel,
+            url: videoUrl,
+            ext: 'mp4',
+            isBest: true,
+          },
+        ],
+      },
+    ],
+  };
+}
+
 /* ==========================================================================
    6. STREAM PROXY FOR ANTI-HOTLINKING & DIRECT MOBILE DOWNLOAD
    ========================================================================== */
@@ -2422,6 +2578,15 @@ function getRefererForHost(hostname) {
     h.includes('shizhuang-inc')
   ) {
     return { referer: 'https://www.dewu.com/', ua: MOBILE_UA };
+  }
+  if (
+    h.includes('bilibili') ||
+    h.includes('bilivideo') ||
+    h.includes('hdslb') ||
+    h.includes('biliapi') ||
+    h.includes('akamaized')
+  ) {
+    return { referer: 'https://www.bilibili.com/', ua: DESKTOP_UA };
   }
   return { referer: 'https://x.com/', ua: DESKTOP_UA };
 }
@@ -2714,7 +2879,7 @@ const server = http.createServer(async (req, res) => {
         publicUrl,
         lanUrl: `http://${lanIp}:${PORT}`,
         localUrl: `http://localhost:${PORT}`,
-        platforms: ['douyin', 'tiktok', 'xiaohongshu', 'x', 'instagram', 'dewu'],
+        platforms: ['douyin', 'tiktok', 'xiaohongshu', 'x', 'instagram', 'dewu', 'bilibili'],
       })
     );
     return;
@@ -2741,7 +2906,7 @@ const server = http.createServer(async (req, res) => {
             JSON.stringify({
               ok: false,
               error:
-                '未识别到有效链接，请直接粘贴 抖音 / TikTok / 小红书 / X / Instagram / 得物 的分享口令或网页链接',
+                '未识别到有效链接，请直接粘贴 抖音 / TikTok / 小红书 / X / Instagram / 得物 / B站 的分享口令或网页链接',
             })
           );
           return;
@@ -2768,9 +2933,11 @@ const server = http.createServer(async (req, res) => {
           result = await parseInstagram(targetUrl);
         } else if (platform === 'dewu') {
           result = await parseDewu(targetUrl);
+        } else if (platform === 'bilibili') {
+          result = await parseBilibili(targetUrl);
         } else {
           throw new Error(
-            `暂不支持该域名 (${new URL(extractedUrl).hostname})，目前支持：抖音、TikTok、小红书、X (Twitter)、Instagram 及 得物 (Poizon)`
+            `暂不支持该域名 (${new URL(extractedUrl).hostname})，目前支持：抖音、TikTok、小红书、X (Twitter)、Instagram、得物 (Poizon) 及 哔哩哔哩 (B站)`
           );
         }
 

@@ -278,6 +278,7 @@
       x: 'detected-x',
       instagram: 'detected-instagram',
       dewu: 'detected-dewu',
+      bilibili: 'detected-bilibili',
       tiktok: 'detected-tiktok',
     };
     return map[platform] || 'detected-x';
@@ -304,6 +305,9 @@
     } else if (/dewu\.com|poizon\.com|dw4\.co|duapp\.com/i.test(val)) {
       detectedBadge.textContent = '已识别：得物 (Poizon) 分享链接';
       detectedBadge.className = 'detected-badge detected-dewu';
+    } else if (/bilibili\.com|b23\.tv|bili2233\.cn/i.test(val)) {
+      detectedBadge.textContent = '已识别：哔哩哔哩 (B站) 视频链接';
+      detectedBadge.className = 'detected-badge detected-bilibili';
     } else if (/x\.com|twitter\.com|vxtwitter\.com|fxtwitter\.com|t\.co/i.test(val)) {
       detectedBadge.textContent = '已识别：X (Twitter) 推文链接';
       detectedBadge.className = 'detected-badge detected-x';
@@ -890,7 +894,7 @@
     e.preventDefault();
     const raw = urlInput.value.trim();
     if (!raw) {
-      showError('请先粘贴 抖音 / TikTok / 小红书 / X / Instagram / 得物 的分享口令或链接');
+      showError('请先粘贴 抖音 / TikTok / 小红书 / X / Instagram / 得物 / B站 的分享口令或链接');
       urlInput.focus();
       return;
     }

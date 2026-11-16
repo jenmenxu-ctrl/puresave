@@ -195,6 +195,10 @@ body {
   background: var(--dewu-cyan);
   box-shadow: 0 0 8px var(--dewu-cyan);
 }
+.pill-bilibili .dot {
+  background: #fb7299;
+  box-shadow: 0 0 8px #fb7299;
+}
 
 .btn-mobile-access {
   display: inline-flex;
@@ -437,6 +441,12 @@ body {
   background: rgba(0, 214, 201, 0.16);
   color: #2dd4bf;
   border: 1px solid rgba(0, 214, 201, 0.38);
+}
+
+.detected-bilibili {
+  background: rgba(251, 114, 153, 0.18);
+  color: #fb7299;
+  border: 1px solid rgba(251, 114, 153, 0.42);
 }
 
 .detected-tiktok {

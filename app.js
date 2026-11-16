@@ -8,11 +8,6 @@
   const btnText = submitBtn.querySelector('.btn-text');
   const btnSpinner = submitBtn.querySelector('.btn-spinner');
 
-  const demoDouyinBtn = document.getElementById('demoDouyinBtn');
-  const demoTiktokBtn = document.getElementById('demoTiktokBtn');
-  const demoInsBtn = document.getElementById('demoInsBtn');
-  const demoXBtn = document.getElementById('demoXBtn');
-  const demoLiveBtn = document.getElementById('demoLiveBtn');
 
   const publicUrlBanner = document.getElementById('publicUrlBanner');
   const bannerPublicLink = document.getElementById('bannerPublicLink');
@@ -353,43 +348,6 @@
     urlInput.focus();
   });
 
-  // Quick verification buttons
-  if (demoDouyinBtn) {
-    demoDouyinBtn.addEventListener('click', () => {
-      urlInput.value =
-        '3.84 复制打开抖音，看看【lucien！的图文作品】哪有那么多意难平，你骑S5你也行。# cervel... https://v.douyin.com/llcLPjSA2wM/';
-      updateInputBadge();
-      parseForm.requestSubmit();
-    });
-  }
-
-  if (demoTiktokBtn) {
-    demoTiktokBtn.addEventListener('click', () => {
-      urlInput.value = 'https://www.tiktok.com/@tiktok/video/7106594312292453675';
-      updateInputBadge();
-      parseForm.requestSubmit();
-    });
-  }
-
-  demoInsBtn.addEventListener('click', () => {
-    urlInput.value = 'https://www.instagram.com/p/CmUv48DLvxd/';
-    updateInputBadge();
-    parseForm.requestSubmit();
-  });
-
-  demoXBtn.addEventListener('click', () => {
-    urlInput.value = 'https://x.com/TheEllenShow/status/440322224407314432';
-    updateInputBadge();
-    parseForm.requestSubmit();
-  });
-
-  demoLiveBtn.addEventListener('click', () => {
-    urlInput.value =
-      '先来几个实况吧 https://xhslink.cn/o/5z9RHPxbH4g 这篇内容在【小红书】候着你~';
-    updateInputBadge();
-    parseForm.requestSubmit();
-  });
-
   function showError(msg) {
     errorText.textContent = msg;
     errorBanner.classList.remove('hidden');
@@ -722,7 +680,7 @@
       const variantsList = document.createElement('div');
       variantsList.className = 'variants-list';
 
-      const variants = item.variants || [
+      const allVariants = item.variants || [
         {
           label: '无损原件 (Lossless)',
           quality: 'Original',
@@ -731,6 +689,11 @@
           isBest: true,
         },
       ];
+      // 只保留一个下载项：实况 → 带声音动态原片(mp4)；其余 → 最佳原件
+      const liveVariant = allVariants.find(
+        (v) => v.isLiveVideo && (v.ext || 'mp4') === 'mp4'
+      );
+      const variants = [liveVariant || allVariants[0]];
 
       variants.forEach((v, vIdx) => {
         const row = document.createElement('div');
@@ -820,7 +783,6 @@
           ? `🔊 下载带声音 .${ext}`
           : `⬇ 下载 .${ext}`;
 
-        btns.appendChild(copyBtn);
         btns.appendChild(shareMobileBtn);
         btns.appendChild(dlBtn);
 

@@ -2,4 +2,5 @@ bin/
 node_modules/
 .tunnel_url.txt
 .server.log
+.gh_token
 .DS_Store

@@ -54,7 +54,19 @@
   const isStaticPagesHost = /github\.io|pages\.dev|vercel\.app|netlify\.app/i.test(
     window.location.hostname
   );
-  let apiBase = isStaticPagesHost ? DEFAULT_TUNNEL_API : '';
+  const queryApiParam = new URLSearchParams(window.location.search).get('api');
+  if (queryApiParam && /^https?:\/\//i.test(queryApiParam)) {
+    try {
+      localStorage.setItem(
+        'puresave_api_base',
+        queryApiParam.replace(/\/+$/, '')
+      );
+    } catch (_) {}
+  }
+
+  let apiBase = isStaticPagesHost
+    ? localStorage.getItem('puresave_api_base') || DEFAULT_TUNNEL_API
+    : '';
   let serverStatus = { publicUrl: null, lanUrl: window.location.origin };
 
   function getCandidateApiBases() {
@@ -63,10 +75,10 @@
     return [
       ...new Set(
         [
+          saved,
           'http://localhost:3456',
           'http://127.0.0.1:3456',
           DEFAULT_TUNNEL_API,
-          saved,
         ].filter(Boolean)
       ),
     ];

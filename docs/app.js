@@ -50,7 +50,7 @@
 
   const HISTORY_KEY = 'puresave_history_v2';
   const DEFAULT_TUNNEL_API =
-    'https://airlines-environments-environments-friends.trycloudflare.com';
+    'https://crawford-commitments-lock-overview.trycloudflare.com';
   const isStaticPagesHost = /github\.io|pages\.dev|vercel\.app|netlify\.app/i.test(
     window.location.hostname
   );
@@ -102,8 +102,9 @@
         [
           queryApiParam ? queryApiParam.replace(/\/+$/, '') : null,
           dynamicTunnelUrl,
-          'http://localhost:3456',
-          'http://127.0.0.1:3456',
+          ...(window.location.protocol === 'http:'
+            ? ['http://localhost:3456', 'http://127.0.0.1:3456']
+            : []),
           DEFAULT_TUNNEL_API,
           saved,
         ].filter(Boolean)
@@ -406,13 +407,58 @@
     btnSpinner.classList.toggle('hidden', !loading);
   }
 
-  function triggerDownload(proxyUrl) {
-    const a = document.createElement('a');
-    a.href = proxyUrl;
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => a.remove(), 1500);
+  async function triggerDownload(proxyUrl, filename = 'puresave-media', btnEl = null) {
+    const origHtml = btnEl ? btnEl.innerHTML : '';
+    try {
+      if (btnEl) {
+        btnEl.innerHTML = '⏳ 下载中...';
+        btnEl.style.pointerEvents = 'none';
+      }
+      let finalName = filename;
+      try {
+        const u = new URL(proxyUrl, window.location.origin);
+        if (!filename || filename === 'puresave-media') {
+          finalName = u.searchParams.get('filename') || 'puresave-media';
+        }
+      } catch (_) {}
+
+      const res = await fetch(proxyUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = finalName;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        a.remove();
+        URL.revokeObjectURL(blobUrl);
+      }, 6000);
+      if (btnEl) {
+        btnEl.innerHTML = '✅ 已保存';
+      }
+    } catch (err) {
+      if (!isStaticPagesHost) {
+        const a = document.createElement('a');
+        a.href = proxyUrl;
+        a.download = filename || 'puresave-media';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => a.remove(), 1500);
+      } else {
+        showError(`下载失败: ${err.message}`);
+      }
+    } finally {
+      if (btnEl) {
+        btnEl.style.pointerEvents = '';
+        setTimeout(() => {
+          btnEl.innerHTML = origHtml;
+        }, 2000);
+      }
+    }
   }
 
   /**
@@ -766,6 +812,10 @@
         dlBtn.className = 'btn-download';
         dlBtn.href = proxyDownloadUrl;
         dlBtn.setAttribute('download', dlFilename);
+        dlBtn.onclick = (e) => {
+          e.preventDefault();
+          triggerDownload(proxyDownloadUrl, dlFilename, dlBtn);
+        };
         dlBtn.innerHTML = v.isLiveVideo
           ? `🔊 下载带声音 .${ext}`
           : `⬇ 下载 .${ext}`;

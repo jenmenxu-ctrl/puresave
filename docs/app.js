@@ -64,10 +64,35 @@
     } catch (_) {}
   }
 
+  let dynamicTunnelUrl = null;
   let apiBase = isStaticPagesHost
-    ? localStorage.getItem('puresave_api_base') || DEFAULT_TUNNEL_API
+    ? queryApiParam || localStorage.getItem('puresave_api_base') || DEFAULT_TUNNEL_API
     : '';
   let serverStatus = { publicUrl: null, lanUrl: window.location.origin };
+
+  async function refreshDynamicTunnelConfig() {
+    if (!isStaticPagesHost) return;
+    const configUrls = [
+      `./tunnel.json?t=${Date.now()}`,
+      `https://raw.githubusercontent.com/jenmenxu-ctrl/puresave/main/tunnel.json?t=${Date.now()}`,
+    ];
+    for (const u of configUrls) {
+      try {
+        const r = await fetch(u, { cache: 'no-store' });
+        if (r.ok) {
+          const j = await r.json();
+          if (j && j.publicUrl && /^https?:\/\//i.test(j.publicUrl)) {
+            dynamicTunnelUrl = j.publicUrl.replace(/\/+$/, '');
+            apiBase = dynamicTunnelUrl;
+            try {
+              localStorage.setItem('puresave_api_base', dynamicTunnelUrl);
+            } catch (_) {}
+            return;
+          }
+        }
+      } catch (_) {}
+    }
+  }
 
   function getCandidateApiBases() {
     if (!isStaticPagesHost) return [''];
@@ -75,10 +100,12 @@
     return [
       ...new Set(
         [
-          saved,
+          queryApiParam ? queryApiParam.replace(/\/+$/, '') : null,
+          dynamicTunnelUrl,
           'http://localhost:3456',
           'http://127.0.0.1:3456',
           DEFAULT_TUNNEL_API,
+          saved,
         ].filter(Boolean)
       ),
     ];
@@ -870,6 +897,9 @@
       }
 
       if (!parsedData) {
+        if (isStaticPagesHost && !dynamicTunnelUrl) {
+          await refreshDynamicTunnelConfig();
+        }
         let lastBackendErr = null;
         const candidates = getCandidateApiBases();
         for (const base of candidates) {
@@ -917,6 +947,9 @@
 
   // Public Tunnel & Mobile QR Code Modal Logic
   async function fetchServerStatus() {
+    if (isStaticPagesHost) {
+      await refreshDynamicTunnelConfig();
+    }
     const candidates = getCandidateApiBases();
     for (const base of candidates) {
       try {

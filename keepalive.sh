@@ -4,7 +4,7 @@ cd /Users/yovo/.gemini/antigravity/scratch/media-saver || exit 1
 LAST_SYNCED_URL=""
 
 while true; do
-  if ! lsof -ti:3456 >/dev/null 2>&1; then
+  if ! lsof -ti tcp:3456 -sTCP:LISTEN >/dev/null 2>&1; then
     nohup node /Users/yovo/.gemini/antigravity/scratch/media-saver/server.js >> /Users/yovo/.gemini/antigravity/scratch/media-saver/.server.log 2>&1 &
   fi
   if [ -f .tunnel_url.txt ] && tail -n 5 .tunnel_url.txt | grep -q "Tunnel not found"; then

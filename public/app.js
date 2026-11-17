@@ -386,6 +386,24 @@
 
       const res = await fetch(proxyUrl);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const contentLength = parseInt(res.headers.get('content-length') || '0', 10);
+      // For large files (>25MB, e.g. long X/Bilibili videos), stream directly via browser download instead of buffering in RAM
+      if (contentLength > 25 * 1024 * 1024) {
+        if (res.body) {
+          res.body.cancel().catch(() => {});
+        }
+        const a = document.createElement('a');
+        a.href = proxyUrl;
+        a.download = finalName;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => a.remove(), 2000);
+        if (btnEl) {
+          btnEl.innerHTML = '✅ 已开始下载';
+        }
+        return;
+      }
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -402,6 +420,14 @@
         btnEl.innerHTML = '✅ 已保存';
       }
     } catch (err) {
+      let fallbackUrl = null;
+      try {
+        const u = new URL(proxyUrl, window.location.origin);
+        if (u.pathname.endsWith('/api/proxy') && u.searchParams.get('url')) {
+          fallbackUrl = u.searchParams.get('url');
+        }
+      } catch (_) {}
+
       if (!isStaticPagesHost) {
         const a = document.createElement('a');
         a.href = proxyUrl;
@@ -410,6 +436,11 @@
         document.body.appendChild(a);
         a.click();
         setTimeout(() => a.remove(), 1500);
+      } else if (fallbackUrl) {
+        window.open(fallbackUrl, '_blank', 'noopener');
+        if (btnEl) {
+          btnEl.innerHTML = '↗ 已打开原链';
+        }
       } else {
         showError(`下载失败: ${err.message}`);
       }

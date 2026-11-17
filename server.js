@@ -2721,6 +2721,8 @@ function handleProxyStream(req, res, queryUrl) {
           '-s',
           '-i',
           '--http1.1',
+          '--connect-timeout',
+          '4',
           '--max-time',
           '120',
           '--interface',

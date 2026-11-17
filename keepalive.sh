@@ -20,7 +20,8 @@ while true; do
   if [ -f /Users/yovo/.gemini/antigravity/scratch/media-saver/.tunnel_url.txt ]; then
     CUR_URL=$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' /Users/yovo/.gemini/antigravity/scratch/media-saver/.tunnel_url.txt | tail -n 1)
     if [ -n "$CUR_URL" ] && [ "$CUR_URL" != "$LAST_SYNCED_URL" ]; then
-      printf '{"publicUrl":"%s","lanUrl":"http://192.168.1.4:3456","updatedAt":%s}\n' "$CUR_URL" "$(date +%s)" > tunnel.json
+      LAN_IP=$(ipconfig getifaddr en0 2>/dev/null || echo "127.0.0.1")
+      printf '{"publicUrl":"%s","lanUrl":"http://%s:3456","updatedAt":%s}\n' "$CUR_URL" "$LAN_IP" "$(date +%s)" > tunnel.json
       cp tunnel.json public/tunnel.json 2>/dev/null || true
       cp tunnel.json docs/tunnel.json 2>/dev/null || true
       if [ -f .gh_token ]; then

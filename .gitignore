@@ -4,3 +4,4 @@ node_modules/
 .server.log
 .gh_token
 .DS_Store
+.keepalive.log

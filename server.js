@@ -941,6 +941,157 @@ async function formatDouyinRouterItem(item, awemeId) {
 /**
  * TikWM API parser for TikTok & Douyin (with automatic rate-limit backoff)
  */
+const PROXY_COOKIE_CACHE = new Map();
+
+function saveProxyCookie(mediaUrl, cookieHeader) {
+  if (!mediaUrl || !cookieHeader) return;
+  if (PROXY_COOKIE_CACHE.size > 200) {
+    const firstKey = PROXY_COOKIE_CACHE.keys().next().value;
+    if (firstKey) PROXY_COOKIE_CACHE.delete(firstKey);
+  }
+  PROXY_COOKIE_CACHE.set(mediaUrl, { cookie: cookieHeader, ts: Date.now() });
+}
+
+async function parseTikTokDirectSSR(inputUrl) {
+  const res = await fetch(inputUrl, {
+    redirect: 'follow',
+    headers: {
+      'User-Agent': DESKTOP_UA,
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+    },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) {
+    throw new Error(`TikTok 页面请求失败 (HTTP ${res.status})`);
+  }
+
+  const rawSetCookies = typeof res.headers.getSetCookie === 'function'
+    ? res.headers.getSetCookie()
+    : (res.headers.get('set-cookie') ? [res.headers.get('set-cookie')] : []);
+  const cookieHeader = rawSetCookies
+    .map((c) => c.split(';')[0].trim())
+    .filter(Boolean)
+    .join('; ');
+
+  const html = await res.text();
+  const m = html.match(/<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>([\s\S]*?)<\/script>/);
+  if (!m) {
+    throw new Error('未能从 TikTok 页面提取媒体数据');
+  }
+  const json = JSON.parse(m[1]);
+  const item = json?.['__DEFAULT_SCOPE__']?.['webapp.video-detail']?.itemInfo?.itemStruct;
+  if (!item) {
+    throw new Error('该 TikTok 链接不存在或已设为私密');
+  }
+
+  const author = {
+    name: item.author?.nickname || 'TikTok Creator',
+    username: item.author?.uniqueId ? `@${item.author.uniqueId}` : '',
+    avatar: item.author?.avatarLarger || item.author?.avatarMedium || '',
+  };
+  const stats = {
+    likes: item.stats?.diggCount || 0,
+    comments: item.stats?.commentCount || 0,
+    shares: item.stats?.shareCount || 0,
+    collects: item.stats?.collectCount || 0,
+  };
+
+  if (Array.isArray(item.imagePost?.images) && item.imagePost.images.length > 0) {
+    const mediaItems = item.imagePost.images.map((img, idx) => {
+      const imgUrl = img.imageURL?.urlList?.[0] || '';
+      if (cookieHeader && imgUrl) saveProxyCookie(imgUrl, cookieHeader);
+      return {
+        index: idx + 1,
+        type: 'photo',
+        url: imgUrl,
+        thumbnail: imgUrl,
+        variants: [
+          {
+            label: '无损无水印原图 (Lossless Image)',
+            quality: 'Original HD JPG',
+            url: imgUrl,
+            ext: 'jpg',
+            isBest: true,
+          },
+        ],
+      };
+    }).filter((x) => x.url);
+
+    if (mediaItems.length > 0) {
+      return {
+        platform: 'tiktok',
+        platformName: 'TikTok',
+        id: item.id || String(Date.now()),
+        type: 'gallery',
+        title: item.desc || 'TikTok 图集作品',
+        author,
+        cover: item.imagePost?.cover?.imageURL?.urlList?.[0] || mediaItems[0].url,
+        musicUrl: item.music?.playUrl || '',
+        stats,
+        mediaItems,
+      };
+    }
+  }
+
+  const video = item.video || {};
+  const playUrl = video.playAddr || video.downloadAddr || '';
+  if (!playUrl) {
+    throw new Error('该 TikTok 视频未包含可下载的媒体流');
+  }
+  if (cookieHeader) saveProxyCookie(playUrl, cookieHeader);
+
+  const variants = [];
+  if (Array.isArray(video.bitrateInfo) && video.bitrateInfo.length > 0) {
+    const sorted = [...video.bitrateInfo].sort((a, b) => (b.Bitrate || 0) - (a.Bitrate || 0));
+    sorted.forEach((b, idx) => {
+      const u = b.PlayAddr?.UrlList?.[0];
+      if (!u) return;
+      if (cookieHeader) saveProxyCookie(u, cookieHeader);
+      variants.push({
+        label: idx === 0 ? '无水印最高画质原画 (Lossless Best)' : `高清视频流 #${idx + 1}`,
+        quality: b.GearName || `${video.width || 0}x${video.height || 0}`,
+        url: u,
+        ext: 'mp4',
+        isBest: idx === 0,
+      });
+    });
+  }
+  if (variants.length === 0) {
+    variants.push({
+      label: '无水印原画视频 (Lossless MP4)',
+      quality: video.width && video.height ? `${video.width}x${video.height}` : 'Original MP4',
+      url: playUrl,
+      ext: 'mp4',
+      isBest: true,
+    });
+  }
+
+  return {
+    platform: 'tiktok',
+    platformName: 'TikTok',
+    id: item.id || String(Date.now()),
+    type: 'video',
+    title: item.desc || 'TikTok 无水印视频',
+    author,
+    cover: video.originCover || video.cover || '',
+    musicUrl: item.music?.playUrl || '',
+    stats,
+    mediaItems: [
+      {
+        index: 1,
+        type: 'video',
+        url: variants[0].url,
+        thumbnail: video.originCover || video.cover || '',
+        width: video.width || 0,
+        height: video.height || 0,
+        duration: video.duration || 0,
+        variants,
+      },
+    ],
+  };
+}
+
 async function parseViaTikwm(inputUrl, platformLabel = 'tiktok', awemeId = null) {
   const candidates = [inputUrl];
   if (platformLabel === 'douyin' && awemeId) {
@@ -950,34 +1101,45 @@ async function parseViaTikwm(inputUrl, platformLabel = 'tiktok', awemeId = null)
   let lastMsg = '';
   for (const candidateUrl of candidates) {
     for (let attempt = 0; attempt < 2; attempt++) {
-      const apiUrl = `https://www.tikwm.com/api/?url=${encodeURIComponent(
-        candidateUrl
-      )}&hd=1`;
-      const res = await fetch(apiUrl, {
-        headers: {
-          'User-Agent': DESKTOP_UA,
-          Accept: 'application/json',
-        },
-      });
-      const json = await res.json();
+      try {
+        const apiUrl = `https://www.tikwm.com/api/?url=${encodeURIComponent(
+          candidateUrl
+        )}&hd=1`;
+        const res = await fetch(apiUrl, {
+          headers: {
+            'User-Agent': DESKTOP_UA,
+            Accept: 'application/json',
+          },
+          signal: AbortSignal.timeout(4500),
+        });
+        const json = await res.json();
 
-      if (json && json.code === 0 && json.data) {
-        return formatTikwmData(json.data, platformLabel);
-      }
+        if (json && json.code === 0 && json.data) {
+          return formatTikwmData(json.data, platformLabel);
+        }
 
-      lastMsg = json?.msg || '';
-      if (/limit/i.test(lastMsg) && attempt === 0) {
-        await new Promise((r) => setTimeout(r, 1150));
-        continue;
+        lastMsg = json?.msg || '';
+        if (/limit/i.test(lastMsg) && attempt === 0) {
+          await new Promise((r) => setTimeout(r, 1150));
+          continue;
+        }
+        break;
+      } catch (err) {
+        lastMsg = err.message || '网络请求失败';
+        if (attempt === 0) {
+          await new Promise((r) => setTimeout(r, 400));
+          continue;
+        }
       }
-      break;
     }
   }
 
+  if (platformLabel === 'tiktok') {
+    return await parseTikTokDirectSSR(inputUrl);
+  }
+
   throw new Error(
-    platformLabel === 'tiktok'
-      ? `无法解析该 TikTok 链接 (${lastMsg || '请检查链接是否有效'})`
-      : `无法解析该抖音链接 (${lastMsg || '请确认链接有效且作品未设为私密'})`
+    `无法解析该抖音链接 (${lastMsg || '请确认链接有效且作品未设为私密'})`
   );
 }
 
@@ -2551,13 +2713,15 @@ async function parseBilibili(targetUrl) {
 
 function getRefererForHost(hostname) {
   const h = (hostname || '').toLowerCase();
+  if (h.includes('tiktok')) {
+    return { referer: 'https://www.tiktok.com/', ua: DESKTOP_UA };
+  }
   if (
     h.includes('douyin') ||
     h.includes('snssdk') ||
     h.includes('byte') ||
     h.includes('amemv') ||
-    h.includes('tikwm') ||
-    h.includes('tiktok')
+    h.includes('tikwm')
   ) {
     return { referer: 'https://www.douyin.com/', ua: MOBILE_UA };
   }
@@ -2617,6 +2781,11 @@ function handleProxyStream(req, res, queryUrl) {
     Accept: '*/*',
     Referer: referer,
   };
+
+  const cachedCookieEntry = PROXY_COOKIE_CACHE.get(targetUrl);
+  if (cachedCookieEntry && cachedCookieEntry.cookie) {
+    requestHeaders.Cookie = cachedCookieEntry.cookie;
+  }
 
   if (req.headers.range) {
     requestHeaders.Range = req.headers.range;

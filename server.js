@@ -349,8 +349,10 @@ async function parseDouyin(inputUrl) {
 }
 
 const domesticDnsCache = new Map();
+const HAS_DARWIN_EN0 = os.platform() === 'darwin' && Boolean(os.networkInterfaces().en0);
 
 function isDomesticChinaHost(hostname) {
+  if (!HAS_DARWIN_EN0) return false;
   return /(\.|^)(douyin|douyinvod|douyinpic|iesdouyin|byteimg|bytedance|snssdk|amemv|pstatp|ixigua|xiaohongshu|xhscdn|xhslink|rednote|dewu|poizon|duapp|shizhuang-inc|dw4|bilibili|b23|bili2233|bilivideo|hdslb|biliapi)\./i.test(
     hostname || ''
   );
@@ -1110,7 +1112,7 @@ async function parseViaTikwm(inputUrl, platformLabel = 'tiktok', awemeId = null)
             'User-Agent': DESKTOP_UA,
             Accept: 'application/json',
           },
-          signal: AbortSignal.timeout(4500),
+          signal: AbortSignal.timeout(3500),
         });
         const json = await res.json();
 
@@ -1126,10 +1128,11 @@ async function parseViaTikwm(inputUrl, platformLabel = 'tiktok', awemeId = null)
         break;
       } catch (err) {
         lastMsg = err.message || '网络请求失败';
-        if (attempt === 0) {
+        if (platformLabel !== 'tiktok' && attempt === 0) {
           await new Promise((r) => setTimeout(r, 400));
           continue;
         }
+        break;
       }
     }
   }
@@ -2576,26 +2579,41 @@ async function parseDewu(inputUrl) {
  * Fetch JSON from domestic China API via en0 direct interface (bypasses TUN/VPN 412 blocks)
  */
 async function fetchDomesticJson(url, headers = {}) {
-  const u = new URL(url);
-  const realIps = await resolveChinaDomesticIps(u.hostname);
-  const args = [
-    '-s',
-    '--max-time',
-    '10',
-    '-H',
-    `User-Agent: ${DESKTOP_UA}`,
-    '-H',
-    'Referer: https://www.bilibili.com/',
-  ];
-  if (realIps.length > 0) {
-    args.push('--interface', 'en0', '--resolve', `${u.hostname}:443:${realIps[0]}`);
+  if (HAS_DARWIN_EN0) {
+    try {
+      const u = new URL(url);
+      const realIps = await resolveChinaDomesticIps(u.hostname);
+      const args = [
+        '-s',
+        '--connect-timeout',
+        '4',
+        '--max-time',
+        '10',
+        '-H',
+        `User-Agent: ${DESKTOP_UA}`,
+        '-H',
+        'Referer: https://www.bilibili.com/',
+      ];
+      if (realIps.length > 0) {
+        args.push('--interface', 'en0', '--resolve', `${u.hostname}:443:${realIps[0]}`);
+      }
+      for (const [k, v] of Object.entries(headers)) {
+        if (v) args.push('-H', `${k}: ${v}`);
+      }
+      args.push(url);
+      const raw = await runCurl(args);
+      return JSON.parse(raw);
+    } catch (_) {}
   }
-  for (const [k, v] of Object.entries(headers)) {
-    if (v) args.push('-H', `${k}: ${v}`);
-  }
-  args.push(url);
-  const raw = await runCurl(args);
-  return JSON.parse(raw);
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': DESKTOP_UA,
+      Referer: 'https://www.bilibili.com/',
+      ...headers,
+    },
+    signal: AbortSignal.timeout(8000),
+  });
+  return await res.json();
 }
 
 /**

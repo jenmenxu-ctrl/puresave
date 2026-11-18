@@ -60,6 +60,7 @@
   }
 
   let dynamicTunnelUrl = null;
+  let backendOnline = !isStaticPagesHost;
   let apiBase = isStaticPagesHost
     ? queryApiParam || localStorage.getItem('puresave_api_base') || DEFAULT_TUNNEL_API
     : '';
@@ -109,6 +110,9 @@
 
   function buildProxyUrl(remoteUrl, filename, disposition = 'attachment') {
     if (!remoteUrl) return '';
+    if (isStaticPagesHost && !backendOnline) {
+      return remoteUrl;
+    }
     const params = new URLSearchParams({
       url: remoteUrl,
       filename: filename || 'puresave-media',
@@ -1010,6 +1014,7 @@
               continue;
             }
             apiBase = base;
+            backendOnline = true;
             parsedData = json.data;
             break;
           } catch (err) {
@@ -1047,6 +1052,7 @@
         const data = await res.json();
         if (data.ok) {
           apiBase = base;
+          backendOnline = true;
           serverStatus = data;
           if (data.publicUrl) {
             try {

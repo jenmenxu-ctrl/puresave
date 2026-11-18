@@ -45,7 +45,7 @@
 
   const HISTORY_KEY = 'puresave_history_v2';
   const DEFAULT_TUNNEL_API =
-    'https://crawford-commitments-lock-overview.trycloudflare.com';
+    'https://puresave-backend-production.up.railway.app';
   const isStaticPagesHost = /github\.io|pages\.dev|vercel\.app|netlify\.app/i.test(
     window.location.hostname
   );
@@ -62,7 +62,7 @@
   let dynamicTunnelUrl = null;
   let backendOnline = !isStaticPagesHost;
   let apiBase = isStaticPagesHost
-    ? queryApiParam || localStorage.getItem('puresave_api_base') || DEFAULT_TUNNEL_API
+    ? queryApiParam || DEFAULT_TUNNEL_API
     : '';
   let serverStatus = { publicUrl: null, lanUrl: window.location.origin };
 
@@ -97,11 +97,11 @@
       ...new Set(
         [
           queryApiParam ? queryApiParam.replace(/\/+$/, '') : null,
+          DEFAULT_TUNNEL_API,
           dynamicTunnelUrl,
           ...(window.location.protocol === 'http:'
             ? ['http://localhost:3456', 'http://127.0.0.1:3456']
             : []),
-          DEFAULT_TUNNEL_API,
           saved,
         ].filter(Boolean)
       ),

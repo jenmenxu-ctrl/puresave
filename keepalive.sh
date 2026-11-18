@@ -2,15 +2,33 @@
 cd /Users/yovo/.gemini/antigravity/scratch/media-saver || exit 1
 
 LAST_SYNCED_URL=""
+FAIL_COUNT=0
+LOOP_COUNT=0
 
 while true; do
+  LOOP_COUNT=$((LOOP_COUNT + 1))
   if ! lsof -ti tcp:3456 -sTCP:LISTEN >/dev/null 2>&1; then
     nohup node /Users/yovo/.gemini/antigravity/scratch/media-saver/server.js >> /Users/yovo/.gemini/antigravity/scratch/media-saver/.server.log 2>&1 &
   fi
-  if [ -f .tunnel_url.txt ] && tail -n 5 .tunnel_url.txt | grep -q "Tunnel not found"; then
+  if [ -f .tunnel_url.txt ] && tail -n 5 .tunnel_url.txt | grep -qE "Tunnel not found|TLS handshake with edge error"; then
     pkill -f "cloudflared tunnel" >/dev/null 2>&1
     rm -f .tunnel_url.txt
+    FAIL_COUNT=0
     sleep 2
+  fi
+  if [ $((LOOP_COUNT % 6)) -eq 0 ] && [ -n "$LAST_SYNCED_URL" ]; then
+    if ! curl -sf --max-time 6 "${LAST_SYNCED_URL}/api/status" >/dev/null 2>&1; then
+      FAIL_COUNT=$((FAIL_COUNT + 1))
+      if [ "$FAIL_COUNT" -ge 2 ]; then
+        pkill -f "cloudflared tunnel" >/dev/null 2>&1
+        rm -f .tunnel_url.txt
+        FAIL_COUNT=0
+        LAST_SYNCED_URL=""
+        sleep 2
+      fi
+    else
+      FAIL_COUNT=0
+    fi
   fi
   if ! pgrep -f "cloudflared tunnel" >/dev/null 2>&1; then
     rm -f .tunnel_url.txt

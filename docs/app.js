@@ -384,7 +384,10 @@
         }
       } catch (_) {}
 
-      const res = await fetch(proxyUrl);
+      const controller = new AbortController();
+      const connectTimer = setTimeout(() => controller.abort(), 6500);
+      const res = await fetch(proxyUrl, { signal: controller.signal });
+      clearTimeout(connectTimer);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const contentLength = parseInt(res.headers.get('content-length') || '0', 10);
       // For large files (>25MB, e.g. long X/Bilibili videos), stream directly via browser download instead of buffering in RAM
@@ -437,9 +440,49 @@
         a.click();
         setTimeout(() => a.remove(), 1500);
       } else if (fallbackUrl) {
-        window.open(fallbackUrl, '_blank', 'noopener');
-        if (btnEl) {
-          btnEl.innerHTML = '↗ 已打开原链';
+        try {
+          const directRes = await fetch(fallbackUrl);
+          if (!directRes.ok) throw new Error(`HTTP ${directRes.status}`);
+          const directLen = parseInt(directRes.headers.get('content-length') || '0', 10);
+          if (directLen > 25 * 1024 * 1024) {
+            if (directRes.body) directRes.body.cancel().catch(() => {});
+            const a = document.createElement('a');
+            a.href = fallbackUrl;
+            a.target = '_blank';
+            a.rel = 'noopener';
+            a.download = filename || 'puresave-media';
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => a.remove(), 1500);
+            if (btnEl) btnEl.innerHTML = '↗ 已开始下载';
+          } else {
+            const blob = await directRes.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = filename || 'puresave-media';
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+              a.remove();
+              URL.revokeObjectURL(blobUrl);
+            }, 6000);
+            if (btnEl) btnEl.innerHTML = '✅ 已保存';
+          }
+        } catch (_) {
+          const a = document.createElement('a');
+          a.href = fallbackUrl;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => a.remove(), 1500);
+          if (btnEl) {
+            btnEl.innerHTML = '↗ 已打开原链';
+          }
         }
       } else {
         showError(`下载失败: ${err.message}`);

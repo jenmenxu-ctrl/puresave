@@ -60,6 +60,7 @@
   }
 
   let dynamicTunnelUrl = null;
+  let macTunnelUrl = null;
   let backendOnline = !isStaticPagesHost;
   let apiBase = isStaticPagesHost
     ? queryApiParam || DEFAULT_TUNNEL_API
@@ -77,6 +78,9 @@
         const r = await fetch(u, { cache: 'no-store' });
         if (r.ok) {
           const j = await r.json();
+          if (j && j.macTunnelUrl && /^https?:\/\//i.test(j.macTunnelUrl)) {
+            macTunnelUrl = j.macTunnelUrl.replace(/\/+$/, '');
+          }
           if (j && j.publicUrl && /^https?:\/\//i.test(j.publicUrl)) {
             dynamicTunnelUrl = j.publicUrl.replace(/\/+$/, '');
             apiBase = dynamicTunnelUrl;
@@ -90,15 +94,17 @@
     }
   }
 
-  function getCandidateApiBases() {
+  function getCandidateApiBases(preferDomestic = false) {
     if (!isStaticPagesHost) return [''];
     const saved = localStorage.getItem('puresave_api_base');
+    const ordered = preferDomestic
+      ? [macTunnelUrl, DEFAULT_TUNNEL_API, dynamicTunnelUrl]
+      : [DEFAULT_TUNNEL_API, dynamicTunnelUrl, macTunnelUrl];
     return [
       ...new Set(
         [
           queryApiParam ? queryApiParam.replace(/\/+$/, '') : null,
-          DEFAULT_TUNNEL_API,
-          dynamicTunnelUrl,
+          ...ordered,
           ...(window.location.protocol === 'http:'
             ? ['http://localhost:3456', 'http://127.0.0.1:3456']
             : []),
@@ -991,24 +997,32 @@
       }
 
       if (!parsedData) {
-        if (isStaticPagesHost && !dynamicTunnelUrl) {
+        if (isStaticPagesHost && (!dynamicTunnelUrl || !macTunnelUrl)) {
           await refreshDynamicTunnelConfig();
         }
+        const preferDomestic =
+          /douyin|iesdouyin|xiaohongshu|xhslink|rednote|dewu|poizon|dw4|bilibili|b23\.tv/i.test(
+            raw
+          );
         let lastBackendErr = null;
-        const candidates = getCandidateApiBases();
+        const candidates = getCandidateApiBases(preferDomestic);
         for (const base of candidates) {
           try {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 8000);
             const res = await fetch(`${base}/api/parse`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ input: raw }),
+              signal: ctrl.signal,
             });
+            clearTimeout(timer);
             const json = await res.json();
             if (!res.ok || !json.ok) {
               lastBackendErr = new Error(
                 json.error || '解析失败，请检查链接是否公开有效'
               );
-              if (res.status === 422 || res.status === 400) {
+              if (res.status === 400) {
                 break;
               }
               continue;

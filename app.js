@@ -70,8 +70,8 @@
   async function refreshDynamicTunnelConfig() {
     if (!isStaticPagesHost) return;
     const configUrls = [
-      `./tunnel.json?t=${Date.now()}`,
       `https://raw.githubusercontent.com/jenmenxu-ctrl/puresave/main/tunnel.json?t=${Date.now()}`,
+      `./tunnel.json?t=${Date.now()}`,
     ];
     for (const u of configUrls) {
       try {
@@ -395,7 +395,7 @@
       } catch (_) {}
 
       const controller = new AbortController();
-      const connectTimer = setTimeout(() => controller.abort(), 6500);
+      const connectTimer = setTimeout(() => controller.abort(), 12000);
       const res = await fetch(proxyUrl, { signal: controller.signal });
       clearTimeout(connectTimer);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -997,19 +997,19 @@
       }
 
       if (!parsedData) {
-        if (isStaticPagesHost && (!dynamicTunnelUrl || !macTunnelUrl)) {
-          await refreshDynamicTunnelConfig();
-        }
         const preferDomestic =
           /douyin|iesdouyin|xiaohongshu|xhslink|rednote|dewu|poizon|dw4|bilibili|b23\.tv/i.test(
             raw
           );
+        if (isStaticPagesHost && (preferDomestic || !dynamicTunnelUrl || !macTunnelUrl)) {
+          await refreshDynamicTunnelConfig();
+        }
         let lastBackendErr = null;
         const candidates = getCandidateApiBases(preferDomestic);
         for (const base of candidates) {
           try {
             const ctrl = new AbortController();
-            const timer = setTimeout(() => ctrl.abort(), 8000);
+            const timer = setTimeout(() => ctrl.abort(), 20000);
             const res = await fetch(`${base}/api/parse`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
